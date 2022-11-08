@@ -55,6 +55,8 @@ $(OBJCOPY) --add-section ".$(patsubst %.csv,%,$(1))=$(1)" $(2)
 endef
 
 SBATPATH = $(TOPDIR)/data/sbat.csv
+SBATLEVELLATESTPATH = $(TOPDIR)/data/sbat_level_latest.csv
+SBATLEVELPREVIOUSPATH = $(TOPDIR)/data/sbat_level_previous.csv
 VENDOR_SBATS := $(sort $(foreach x,$(wildcard $(TOPDIR)/data/sbat.*.csv data/sbat.*.csv),$(notdir $(x))))
 
 OBJFLAGS =
@@ -84,7 +86,7 @@ ifeq ($(ARCH),arm)
 	BUILDFLAGS += -ffreestanding -I$(shell $(CC) -print-file-name=include)
 endif
 
-all : certwrapper.efi
+all : certwrapper.efi revocations.efi
 
 certwrapper.so : sbat_data.o certwrapper.o
 certwrapper.so : SOLIBS=
@@ -93,6 +95,15 @@ certwrapper.so : BUILDFLAGS+=-DVENDOR_DB
 certwrapper.efi : OBJFLAGS = --strip-unneeded $(call VENDOR_DB, $<)
 certwrapper.efi : SECTIONS=.text .reloc .db .sbat
 certwrapper.efi : VENDOR_DB_FILE?=db.esl
+
+revocations.so : sbat_data.o revocations.o
+revocations.so : SOLIBS=
+revocations.so : SOFLAGS=
+revocations.efi : OBJFLAGS = --strip-unneeded 
+revocations.efi : SECTIONS=.text .reloc .sbat .sbatl .sbatp
+
+revocations.o : certwrapper.o
+	cp certwrapper.o revocations.o
 
 %.efi : %.so
 ifneq ($(OBJCOPY_GTE224),1)
@@ -108,6 +119,12 @@ sbat_data.o : /dev/null
 	$(CC) $(BUILDFLAGS) -x c -c -o $@ $<
 	$(OBJCOPY) --add-section .sbat=$(SBATPATH) \
 		--set-section-flags .sbat=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sbatl=$(SBATLEVELLATESTPATH) \
+		--set-section-flags .sbatl=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sbatp=$(SBATLEVELPREVIOUSPATH) \
+		--set-section-flags .sbatp=contents,alloc,load,readonly,data \
 		$@
 	$(foreach vs,$(VENDOR_SBATS),$(call add-vendor-sbat,$(vs),$@))
 

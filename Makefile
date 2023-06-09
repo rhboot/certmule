@@ -51,12 +51,19 @@ endef
 
 define add-vendor-sbat
 $(OBJCOPY) --add-section ".$(patsubst %.csv,%,$(1))=$(1)" $(2)
+endef
 
+define add-skusi
+$(OBJCOPY) --add-section ".$(patsubst %.bin,%,$(1))=$(1)" $(2)
 endef
 
 SBATPATH = $(TOPDIR)/data/sbat.csv
 SBATLEVELLATESTPATH = $(TOPDIR)/data/sbat_level_latest.csv
 SBATLEVELPREVIOUSPATH = $(TOPDIR)/data/sbat_level_previous.csv
+SSPVLATESTPATH = $(TOPDIR)/data/SkuSiPolicy_Version_latest.bin
+SSPSLATESTPATH = $(TOPDIR)/data/SkuSiPolicy_latest.bin
+SSPVPREVIOUSPATH = $(TOPDIR)/data/SkuSiPolicy_Version_previous.bin
+SSPSPREVIOUSPATH = $(TOPDIR)/data/SkuSiPolicy_previous.bin
 VENDOR_SBATS := $(sort $(foreach x,$(wildcard $(TOPDIR)/data/sbat.*.csv data/sbat.*.csv),$(notdir $(x))))
 
 OBJFLAGS =
@@ -88,7 +95,7 @@ endif
 
 all : certwrapper.efi revocations.efi
 
-certwrapper.so : sbat_data.o certwrapper.o
+certwrapper.so : revocation_data.o certwrapper.o
 certwrapper.so : SOLIBS=
 certwrapper.so : SOFLAGS=
 certwrapper.so : BUILDFLAGS+=-DVENDOR_DB
@@ -96,11 +103,11 @@ certwrapper.efi : OBJFLAGS = --strip-unneeded $(call VENDOR_DB, $<)
 certwrapper.efi : SECTIONS=.text .reloc .db .sbat
 certwrapper.efi : VENDOR_DB_FILE?=db.esl
 
-revocations.so : sbat_data.o revocations.o
+revocations.so : revocation_data.o revocations.o
 revocations.so : SOLIBS=
 revocations.so : SOFLAGS=
-revocations.efi : OBJFLAGS = --strip-unneeded 
-revocations.efi : SECTIONS=.text .reloc .sbat .sbatl .sbatp
+revocations.efi : OBJFLAGS = --strip-unneeded
+revocations.efi : SECTIONS=.text .reloc .sbat .sbatl .sbatp .sspvp .sspsp .sspvl .sspsl
 
 revocations.o : certwrapper.o
 	cp certwrapper.o revocations.o
@@ -114,8 +121,8 @@ endif
 		   $(OBJFLAGS) \
 		   $(FORMAT) $^ $@
 
-sbat_data.o : | $(SBATPATH) $(VENDOR_SBATS)
-sbat_data.o : /dev/null
+revocation_data.o : | $(SBATPATH) $(VENDOR_SBATS)
+revocation_data.o : /dev/null
 	$(CC) $(BUILDFLAGS) -x c -c -o $@ $<
 	$(OBJCOPY) --add-section .sbat=$(SBATPATH) \
 		--set-section-flags .sbat=contents,alloc,load,readonly,data \
@@ -125,6 +132,18 @@ sbat_data.o : /dev/null
 		$@
 	$(OBJCOPY) --add-section .sbatp=$(SBATLEVELPREVIOUSPATH) \
 		--set-section-flags .sbatp=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sspvl=$(SSPVLATESTPATH) \
+		--set-section-flags .sspvl=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sspsl=$(SSPSLATESTPATH) \
+		--set-section-flags .sspsl=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sspvp=$(SSPVPREVIOUSPATH) \
+		--set-section-flags .sspvp=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sspsp=$(SSPSPREVIOUSPATH) \
+		--set-section-flags .sspsp=contents,alloc,load,readonly,data \
 		$@
 	$(foreach vs,$(VENDOR_SBATS),$(call add-vendor-sbat,$(vs),$@))
 

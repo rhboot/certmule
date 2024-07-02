@@ -32,6 +32,8 @@ LD = $(CROSS_COMPILE)ld
 OBJCOPY = $(CROSS_COMPILE)objcopy
 OBJCOPY_GTE224  = $(shell expr $$($(OBJCOPY) --version |grep "^GNU objcopy" | sed 's/^.*\((.*)\|version\) //g' | cut -f1-2 -d.) \>= 2.24)
 INSTALLROOT ?= $(DESTDIR)
+DOS2UNIX ?= dos2unix
+D2UFLAGS ?= -r -l -F -f -n
 
 dbsize = \
 	$(if $(filter-out undefined,$(origin VENDOR_DB_FILE)),$(shell /usr/bin/stat --printf="%s" $(VENDOR_DB_FILE)),0)
@@ -55,6 +57,11 @@ $(OBJCOPY) --add-section ".$(patsubst %.csv,%,$(1))=$(1)" $(2)
 endef
 
 SBATPATH = $(TOPDIR)/data/sbat.csv
+
+sbat.%.csv : data/sbat.%.csv
+	$(DOS2UNIX) $(D2UFLAGS) $< $@
+	tail -c1 $@ | read -r _ || echo >> $@ # ensure a trailing newline
+
 VENDOR_SBATS := $(sort $(foreach x,$(wildcard $(TOPDIR)/data/sbat.*.csv data/sbat.*.csv),$(notdir $(x))))
 
 OBJFLAGS =

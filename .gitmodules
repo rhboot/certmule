@@ -2,3 +2,6 @@
 	path = gnu-efi
 	url = https://github.com/rhboot/gnu-efi
 	branch = shim-15.6
+[submodule "shim"]
+	path = shim
+	url = https://github.com/rhboot/shim

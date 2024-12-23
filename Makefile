@@ -112,6 +112,19 @@ revocations.efi : SECTIONS=.text .reloc .sbat .sbatl .sbata .sspva .sspsa .sspvl
 revocations.o : certwrapper.o
 	cp certwrapper.o revocations.o
 
+SBAT_LATEST_DATE ?= 2023012950
+SBAT_AUTOMATIC_DATE ?= 2023012900
+
+$(SBATLEVELLATESTPATH) :
+	awk '/^sbat,1,$(SBAT_LATEST_DATE)/ { print $$0 }' \
+		FS=\"\n\" RS=\\n\\n shim/SbatLevel_Variable.txt \
+		> $@
+
+$(SBATLEVELAUTOMATICPATH) :
+	awk '/^sbat,1,$(SBAT_AUTOMATIC_DATE)/ { print $$0 }' \
+		FS=\"\n\" RS=\\n\\n shim/SbatLevel_Variable.txt \
+		> $@
+
 %.efi : %.so
 ifneq ($(OBJCOPY_GTE224),1)
 	$(error objcopy >= 2.24 is required)
@@ -121,6 +134,7 @@ endif
 		   $(OBJFLAGS) \
 		   $(FORMAT) $^ $@
 
+revocation_data.o : $(SBATLEVELLATESTPATH) $(SBATLEVELAUTOMATICPATH)
 revocation_data.o : | $(SBATPATH) $(VENDOR_SBATS)
 revocation_data.o : /dev/null
 	$(CC) $(BUILDFLAGS) -x c -c -o $@ $<
@@ -156,7 +170,7 @@ revocation_data.o : /dev/null
 	$(CC) $(BUILDFLAGS) -c -o $@ $^
 
 clean :
-	@rm -vf *.o *.so *.efi
+	@rm -vf *.o *.so *.efi $(SBATLEVELLATESTPATH) $(SBATLEVELAUTOMATICPATH)
 
 update :
 	git submodule update --init --recursive

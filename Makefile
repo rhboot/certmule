@@ -93,7 +93,7 @@ ifeq ($(ARCH),arm)
 	BUILDFLAGS += -ffreestanding -I$(shell $(CC) -print-file-name=include)
 endif
 
-all : certwrapper.efi revocations.efi
+all : certwrapper.efi revocations.efi revocations_sbat.efi revocations_sku.efi
 
 certwrapper.so : revocation_data.o certwrapper.o
 certwrapper.so : SOLIBS=
@@ -104,13 +104,21 @@ certwrapper.efi : SECTIONS=.text .reloc .db .sbat
 certwrapper.efi : VENDOR_DB_FILE?=db.esl
 
 revocations.so : revocation_data.o revocations.o
-revocations.so : SOLIBS=
-revocations.so : SOFLAGS=
-revocations.efi : OBJFLAGS = --strip-unneeded
+revocations_sbat.so : revocation_data.o revocations_sbat.o
+revocations_sku.so : revocation_data.o revocations_sku.o
+revocations_sbat.so revocations_sku.so revocations.so : SOLIBS=
+revocations_sbat.so revocations_sku.so revocations.so : SOFLAGS=
+revocations_sbat.efi revocations_sku.efi revocations.efi : OBJFLAGS = --strip-unneeded
 revocations.efi : SECTIONS=.text .reloc .sbat .sbatl .sbata .sspva .sspsa .sspvl .sspsl
+revocations_sbat.efi : SECTIONS=.text .reloc .sbat .sbatl .sbata
+revocations_sku.efi : SECTIONS=.text .reloc .sbat .sspva .sspsa .sspvl .sspsl
 
 revocations.o : certwrapper.o
 	cp certwrapper.o revocations.o
+revocations_sbat.o : certwrapper.o
+	cp certwrapper.o revocations_sbat.o
+revocations_sku.o : certwrapper.o
+	cp certwrapper.o revocations_sku.o
 
 SBAT_LATEST_DATE ?= 2023012950
 SBAT_AUTOMATIC_DATE ?= 2023012900

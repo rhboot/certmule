@@ -51,10 +51,19 @@ endef
 
 define add-vendor-sbat
 $(OBJCOPY) --add-section ".$(patsubst %.csv,%,$(1))=$(1)" $(2)
+endef
 
+define add-skusi
+$(OBJCOPY) --add-section ".$(patsubst %.bin,%,$(1))=$(1)" $(2)
 endef
 
 SBATPATH = $(TOPDIR)/data/sbat.csv
+SBATLEVELLATESTPATH = $(TOPDIR)/data/sbat_level_latest.csv
+SBATLEVELAUTOMATICPATH = $(TOPDIR)/data/sbat_level_automatic.csv
+SSPVLATESTPATH = $(TOPDIR)/data/SkuSiPolicy_Version_latest.bin
+SSPSLATESTPATH = $(TOPDIR)/data/SkuSiPolicy_latest.bin
+SSPVAUTOMATICPATH = $(TOPDIR)/data/SkuSiPolicy_Version_automatic.bin
+SSPSAUTOMATICPATH = $(TOPDIR)/data/SkuSiPolicy_automatic.bin
 VENDOR_SBATS := $(sort $(foreach x,$(wildcard $(TOPDIR)/data/sbat.*.csv data/sbat.*.csv),$(notdir $(x))))
 
 OBJFLAGS =
@@ -84,15 +93,45 @@ ifeq ($(ARCH),arm)
 	BUILDFLAGS += -ffreestanding -I$(shell $(CC) -print-file-name=include)
 endif
 
-all : certwrapper.efi
+all : certwrapper.efi revocations.efi revocations_sbat.efi revocations_sku.efi
 
-certwrapper.so : sbat_data.o certwrapper.o
+certwrapper.so : revocation_data.o certwrapper.o
 certwrapper.so : SOLIBS=
 certwrapper.so : SOFLAGS=
 certwrapper.so : BUILDFLAGS+=-DVENDOR_DB
 certwrapper.efi : OBJFLAGS = --strip-unneeded $(call VENDOR_DB, $<)
 certwrapper.efi : SECTIONS=.text .reloc .db .sbat
 certwrapper.efi : VENDOR_DB_FILE?=db.esl
+
+revocations.so : revocation_data.o revocations.o
+revocations_sbat.so : revocation_data.o revocations_sbat.o
+revocations_sku.so : revocation_data.o revocations_sku.o
+revocations_sbat.so revocations_sku.so revocations.so : SOLIBS=
+revocations_sbat.so revocations_sku.so revocations.so : SOFLAGS=
+revocations_sbat.efi revocations_sku.efi revocations.efi : OBJFLAGS = --strip-unneeded
+revocations.efi : SECTIONS=.text .reloc .sbat .sbatl .sbata .sspva .sspsa .sspvl .sspsl
+revocations_sbat.efi : SECTIONS=.text .reloc .sbat .sbatl .sbata
+revocations_sku.efi : SECTIONS=.text .reloc .sbat .sspva .sspsa .sspvl .sspsl
+
+revocations.o : certwrapper.o
+	cp certwrapper.o revocations.o
+revocations_sbat.o : certwrapper.o
+	cp certwrapper.o revocations_sbat.o
+revocations_sku.o : certwrapper.o
+	cp certwrapper.o revocations_sku.o
+
+SBAT_LATEST_DATE ?= 2023012950
+SBAT_AUTOMATIC_DATE ?= 2023012900
+
+$(SBATLEVELLATESTPATH) :
+	awk '/^sbat,1,$(SBAT_LATEST_DATE)/ { print $$0 }' \
+		FS=\"\n\" RS=\\n\\n shim/SbatLevel_Variable.txt \
+		> $@
+
+$(SBATLEVELAUTOMATICPATH) :
+	awk '/^sbat,1,$(SBAT_AUTOMATIC_DATE)/ { print $$0 }' \
+		FS=\"\n\" RS=\\n\\n shim/SbatLevel_Variable.txt \
+		> $@
 
 %.efi : %.so
 ifneq ($(OBJCOPY_GTE224),1)
@@ -103,11 +142,30 @@ endif
 		   $(OBJFLAGS) \
 		   $(FORMAT) $^ $@
 
-sbat_data.o : | $(SBATPATH) $(VENDOR_SBATS)
-sbat_data.o : /dev/null
+revocation_data.o : $(SBATLEVELLATESTPATH) $(SBATLEVELAUTOMATICPATH)
+revocation_data.o : | $(SBATPATH) $(VENDOR_SBATS)
+revocation_data.o : /dev/null
 	$(CC) $(BUILDFLAGS) -x c -c -o $@ $<
 	$(OBJCOPY) --add-section .sbat=$(SBATPATH) \
 		--set-section-flags .sbat=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sbatl=$(SBATLEVELLATESTPATH) \
+		--set-section-flags .sbatl=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sbata=$(SBATLEVELAUTOMATICPATH) \
+		--set-section-flags .sbata=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sspvl=$(SSPVLATESTPATH) \
+		--set-section-flags .sspvl=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sspsl=$(SSPSLATESTPATH) \
+		--set-section-flags .sspsl=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sspva=$(SSPVAUTOMATICPATH) \
+		--set-section-flags .sspva=contents,alloc,load,readonly,data \
+		$@
+	$(OBJCOPY) --add-section .sspsa=$(SSPSAUTOMATICPATH) \
+		--set-section-flags .sspsa=contents,alloc,load,readonly,data \
 		$@
 	$(foreach vs,$(VENDOR_SBATS),$(call add-vendor-sbat,$(vs),$@))
 
@@ -120,7 +178,7 @@ sbat_data.o : /dev/null
 	$(CC) $(BUILDFLAGS) -c -o $@ $^
 
 clean :
-	@rm -vf *.o *.so *.efi
+	@rm -vf *.o *.so *.efi $(SBATLEVELLATESTPATH) $(SBATLEVELAUTOMATICPATH)
 
 update :
 	git submodule update --init --recursive

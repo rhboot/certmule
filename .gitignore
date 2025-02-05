@@ -18,3 +18,7 @@
 # editor backup/tmp files
 *~
 *.sw?
+
+# generated revocation payload
+data/sbat_level_automatic.csv
+data/sbat_level_latest.csv
